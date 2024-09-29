@@ -22,3 +22,14 @@ python3 extract_video.py --df_path baseline/train_data_categories.csv \
 После того как вы скопировали репозиторий локально, веса для модели необходимо поместить в папку `weights` в корне проекта для того чтобы `inference.py` корректно отработал. 
 
 Веса для натренированной модели находятся [здесь](https://github.com/dazzle-me/rsv-tags/releases/tag/weights). 
+
+После извлечения признаков мы запускаем инференс, предсказываем теги - 
+```
+python3 inference.py --df_path baseline/train_data_categories.csv \
+                     --video_df_path video_feat.csv \
+                     --out_path submission.csv \
+                     --model_weights weights \
+                     --tags_path baseline/IAB_tags.csv
+```
+
+Сгенерированный `submission.csv` можно сабмитить на лидерборд, этот сабмит получает скор `0.704`.
