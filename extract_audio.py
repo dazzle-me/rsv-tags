@@ -5,39 +5,61 @@ from pathlib import Path
 import subprocess
 import tqdm
 import whisper
+import argparse
 
-if __name__ == '__main__':
+def main(args):
     ## Прочитаем датафрейм
-    df = pd.read_csv('/home/ssd/tag_video/baseline/train_data_categories.csv')
+    df = pd.read_csv(args.csv_path)
     
-    ## убедимся что все видео заканчиваются на .mp4
-    print(np.all([str(x).endswith('.mp4') for x in os.listdir('/home/ssd/tag_video/videos_2')]))
+    ## Убедимся, что все видео заканчиваются на .mp4
+    if not np.all([str(x).endswith('.mp4') for x in os.listdir(args.video_dir)]):
+        print("Некоторые видео не имеют расширения .mp4. Проверьте корректность файлов.")
+        return
 
-    ## извлечем первую минуту аудио из каждого видео и сложим в отдельную папку
-    audio_duration = 60
-    video_dir = Path('/home/ssd/tag_video/videos_2')
-    audio_dir = Path(f'/home/ssd/tag_video/audio_{audio_duration}')
+    ## Извлечем первую минуту аудио из каждого видео и сохраним в отдельную папку
+    audio_duration = args.audio_duration
+    video_dir = Path(args.video_dir)
+    audio_dir = Path(f'{args.audio_dir}')
     audio_dir.mkdir(exist_ok=True)
 
     for vid in tqdm.tqdm(df['video_id']):
-        ### Explanation:
-        # -i input_video.mp4: Specifies the input video file.
-        # -t 60: Limits the duration of the extracted audio to 60 seconds (1 minute).
-        # -q:a 0: Sets the audio quality to the best possible (optional, for MP3 output).
-        # -map a: Maps only the audio stream, excluding video.
-        # output_audio.mp3: Specifies the output file name and format. You can change the extension (e.g., .wav, .aac) based on your desired format.
-        cmd = f'ffmpeg -i {video_dir / vid}.mp4 -t {audio_duration} -q:a 0 -map a {audio_dir / vid}.mp3',
-        subprocess.call(
-            cmd, shell=True,
-        )
+        ### Пояснение команды:
+        # -i input_video.mp4: Указывает на входной видеофайл.
+        # -t 60: Ограничивает длительность извлекаемого аудио до 60 секунд (1 минута).
+        # -q:a 0: Устанавливает наилучшее качество аудио (опционально, для MP3).
+        # -map a: Извлекает только аудио-дорожку, исключая видео.
+        # output_audio.mp3: Указывает на выходное имя файла и формат (например, .wav, .aac и т.д.).
+        cmd = f'ffmpeg -i {video_dir / vid}.mp4 -t {audio_duration} -q:a 0 -map a {audio_dir / vid}.mp3'
+        subprocess.call(cmd, shell=True)
 
-    ## загрузим whisper
-    model = whisper.load_model('small', device='cuda:0')
+    ## Загрузим модель whisper
+    model = whisper.load_model(args.model_name, device=args.device)
 
-    ## извлечем текст из каждой аудиозаписи и опять сложим в отдельную папку
-    transcribe_dir = Path(f'/home/ssd/tag_video/transcribe_{audio_duration}')
+    ## Извлечем текст из каждой аудиозаписи и сохраним в отдельную папку
+    transcribe_dir = Path(f'{args.transcribe_dir}')
     transcribe_dir.mkdir(exist_ok=True)
     for aud in tqdm.tqdm(df['video_id']):
         result = model.transcribe(str(audio_dir / f"{aud}.mp3"))
         with open(transcribe_dir / f"{aud}.txt", 'w') as f:
             f.write(result['text'])
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description="Скрипт для извлечения и транскрибирования аудио из видеофайлов")
+    
+    parser.add_argument('--csv_path', type=str, required=True,
+                        help='Путь к CSV файлу, содержащему информацию о видеофайлах.')
+    parser.add_argument('--video_dir', type=str, required=True,
+                        help='Путь к директории с видеофайлами.')
+    parser.add_argument('--audio_dir', type=str, required=True,
+                        help='Путь к директории для сохранения извлечённых аудиофайлов.')
+    parser.add_argument('--audio_duration', type=int, default=60,
+                        help='Длительность извлекаемого аудио в секундах (по умолчанию 60).')
+    parser.add_argument('--model_name', type=str, default='small',
+                        help='Имя модели Whisper для транскрибирования (по умолчанию "small").')
+    parser.add_argument('--device', type=str, default='cuda:0',
+                        help='Устройство для вычислений ("cuda:0" или "cpu").')
+    parser.add_argument('--transcribe_dir', type=str, required=True,
+                        help='Путь к директории для сохранения транскрибированных текстов.')
+
+    args = parser.parse_args()
+    main(args)
