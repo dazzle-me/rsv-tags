@@ -116,7 +116,7 @@ class RutubeDatasetTest(Dataset):
 
         tok = self.tokenizer(text, max_length=self.max_len, truncation=True)
 
-        video_feat = self.video_df.loc[video_id].values[1:].astype('float')
+        video_feat = self.video_df.loc[video_id].values.astype('float') #[1:]
         
         return tok, video_feat
     
